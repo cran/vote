@@ -1,0 +1,28 @@
+import(formattable)
+importFrom("knitr", "kable")
+importFrom("utils", "read.table")
+
+export(
+    count.votes,
+    stv,
+    approval,
+    plurality,
+    score,
+    invalid.votes,
+    valid.votes,
+    view
+)
+
+# register S3 methods
+S3method(summary, vote.stv)
+S3method(print, summary.vote.stv)
+S3method(view, vote.stv)
+S3method(summary, vote.approval)
+S3method(print, summary.vote.approval)
+S3method(view, vote.approval)
+S3method(summary, vote.plurality)
+S3method(print, summary.vote.plurality)
+S3method(view, vote.plurality)
+S3method(summary, vote.score)
+S3method(print, summary.vote.score)
+S3method(view, vote.score)
