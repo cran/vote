@@ -61,22 +61,27 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 	rnk <- nij.ranking[,1]
 	dpl <- duplicated(rnk) | duplicated(rnk, fromLast = TRUE)
 	# resolve ranking duplicates by moving to the next column
-	j <- 2
-	while(any(dpl)) {
-	    rnk[dpl] <- NA
-	    for(pref in 1:nc) if(! pref %in% rnk) break
-	    # which candidates to resolve
-	    in.game <- is.na(rnk)
-	    # if we moved across all columns and there are 
-	    # still duplicates, determine the rank randomly
-	    if(j > ncol(nij)) { 
-	        rnk[in.game] <- sample(sum(in.game)) + pref - 1
-	        break
+    if(any(dpl)) {
+	    for(pref in 1:nc) {
+	        if(! pref %in% rnk[dpl]) next
+	        j <- 2
+	        rnk[rnk == pref] <- NA
+	        while(any(is.na(rnk))) {
+	            # which candidates to resolve
+	            in.game <- is.na(rnk)
+	            # if we moved across all columns and there are 
+	            # still duplicates, determine the rank randomly
+	            if(j > ncol(nij)) { 
+	                rnk[in.game] <- sample(sum(in.game)) + pref - 1
+	                break
+	            }
+	            rnk[in.game] <- rank(nij.ranking[in.game, j], ties.method="min") + pref - 1
+	            dplj <- rnk == pref & (duplicated(rnk) | duplicated(rnk, fromLast = TRUE))
+	            rnk[dplj] <- NA
+	            j <- j + 1
+	        }
 	    }
-	    rnk[in.game] <- rank(nij.ranking[in.game, j], ties.method="min") + pref - 1
-	    dpl <- duplicated(rnk) | duplicated(rnk, fromLast = TRUE)
-	    j <- j + 1
-	}
+    }
 	tie.elim.rank <- rnk
 	
 	# initialize results
@@ -90,6 +95,8 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 	if(verbose) cat("\nList of 1st preferences in STV counts: \n")
 	
 	count <- 0
+	first.vcast <- apply(w * (x == 1), 2, sum)
+	names(first.vcast) <- cnames
 	while(mcan > 0) {
 		#
 		# calculate quota and total first preference votes
@@ -113,17 +120,35 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 		#
 		vmax <- max(vcast)
 		if(vmax >= quota) {
-			ic <- max((1:nc)[vcast == vmax])
+			ic <- (1:nc)[vcast == vmax]
+			tie <- FALSE
+			if(length(ic) > 1) {# tie
+			    iic <- which.max(tie.elim.rank[ic])
+			    ic <- ic[iic]
+			    tie <- TRUE
+			}
 			index <- (x[, ic] == 1)
 			w[index] <- (w[index] * (vmax - quota))/vmax
 			mcan <- mcan - 1
 			elected <- c(elected, cnames[ic])
 			result.elect[count,ic] <- 1
-			if(verbose) cat("Candidate", cnames[ic], "elected \n")
+			if(verbose) {
+			    cat("Candidate", cnames[ic], "elected ")
+			    if(tie) cat("using forwards tie-breaking method")
+			    cat("\n")
+			}
 		} else {
 			# if no candidate reaches quota, mark lowest candidate for elimination
-			vmin <- min(vcast[vcast > 0])
-			ic <- (1:nc)[vcast == vmin]
+		    zero.eliminated <- FALSE
+		    # if there are candidates with zero first votes, eliminate those first
+		    if(any(first.vcast == 0)) { 
+		        vmin <- min(first.vcast)
+		        ic <- (1:nc)[first.vcast == vmin]
+		        zero.eliminated <- TRUE
+		    } else {
+			    vmin <- min(vcast[vcast > 0])
+			    ic <- (1:nc)[vcast == vmin]
+		    }
 			tie <- FALSE
 			if(length(ic) > 1) {# tie
 			    iic <- which.min(tie.elim.rank[ic])
@@ -136,6 +161,7 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 			    if(tie) cat("using forwards tie-breaking method")
 			    cat("\n")
 			}
+			if(zero.eliminated)	first.vcast[ic] <- 1
 		}
 		for(i in (1:nvotes)) {
 			jp <- x[i, ic]
