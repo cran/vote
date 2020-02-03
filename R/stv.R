@@ -1,4 +1,4 @@
-stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) {
+stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, seed = 1234, ...) {
 	###################################
 	# Single transferable vote.
 	# Adopted from Bernard Silverman's code.
@@ -60,8 +60,10 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 	nij.ranking <- apply(nij, 2, rank, ties.method="min")
 	rnk <- nij.ranking[,1]
 	dpl <- duplicated(rnk) | duplicated(rnk, fromLast = TRUE)
+	sampled <- rep(FALSE, length(rnk))
 	# resolve ranking duplicates by moving to the next column
     if(any(dpl)) {
+        if(!is.null(seed)) set.seed(seed)
 	    for(pref in 1:nc) {
 	        if(! pref %in% rnk[dpl]) next
 	        j <- 2
@@ -73,6 +75,7 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 	            # still duplicates, determine the rank randomly
 	            if(j > ncol(nij)) { 
 	                rnk[in.game] <- sample(sum(in.game)) + pref - 1
+	                sampled <- sampled | in.game
 	                break
 	            }
 	            rnk[in.game] <- rank(nij.ranking[in.game, j], ties.method="min") + pref - 1
@@ -88,15 +91,14 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 	result.pref <- result.elect <- matrix(NA, ncol=nc, nrow=0, 
 	                                       dimnames=list(NULL, cnames))
 	result.quota <- c()
-	
+	orig.x <- x
 	#
 	# the main loop
 	#
 	if(verbose) cat("\nList of 1st preferences in STV counts: \n")
 	
 	count <- 0
-	first.vcast <- apply(w * (x == 1), 2, sum)
-	names(first.vcast) <- cnames
+	first.vcast <- NULL
 	while(mcan > 0) {
 		#
 		# calculate quota and total first preference votes
@@ -134,13 +136,23 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 			result.elect[count,ic] <- 1
 			if(verbose) {
 			    cat("Candidate", cnames[ic], "elected ")
-			    if(tie) cat("using forwards tie-breaking method")
+			    if(tie) {
+			        cat("using forwards tie-breaking method ")
+			        if(sampled[ic]) cat("(sampled)")
+			    }
 			    cat("\n")
 			}
 		} else {
 			# if no candidate reaches quota, mark lowest candidate for elimination
-		    zero.eliminated <- FALSE
+            #
+		    if(is.null(first.vcast)) { # first time elimination happens
+		        # keep initial count of first preferences after redistributing
+                first.vcast <- apply(w * (x == 1), 2, sum)
+                names(first.vcast) <- cnames
+                first.vcast[colSums(result.elect) > 0] <- 1 # don't allow zeros for already elected candidates
+            }
 		    # if there are candidates with zero first votes, eliminate those first
+		    zero.eliminated <- FALSE
 		    if(any(first.vcast == 0)) { 
 		        vmin <- min(first.vcast)
 		        ic <- (1:nc)[first.vcast == vmin]
@@ -158,11 +170,16 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 			result.elect[count,ic] <- -1
 			if(verbose) {
 			    cat("Candidate", cnames[ic], "eliminated ")
-			    if(tie) cat("using forwards tie-breaking method")
+			    if(zero.eliminated) cat("due to zero first preferences ")
+			    if(tie) {
+			        cat("using forwards tie-breaking method ")
+			        if(sampled[ic]) cat("(sampled)")
+			    }
 			    cat("\n")
 			}
 			if(zero.eliminated)	first.vcast[ic] <- 1
 		}
+		# redistribute votes
 		for(i in (1:nvotes)) {
 			jp <- x[i, ic]
 			if(jp > 0) {
@@ -170,12 +187,12 @@ stv <- function(votes, mcan = NULL, eps=0.001, fsep='\t', verbose = FALSE, ...) 
 				x[i, index] <- x[i, index] - 1
 				x[i, ic] <- 0
 			} 
-		} 
+		}
 	}
 	rownames(result.pref) <- 1:count
 	#cat("\nElected candidates are, in order of election: \n", paste(elected, collapse = ", "), "\n")
 	result <- structure(list(elected = elected, preferences=result.pref, quotas=result.quota,
-	               elect.elim=result.elect, data=x, 
+	               elect.elim=result.elect, data=orig.x, 
 	               invalid.votes=votes[setdiff(rownames(votes), rownames(x)),]), 
 	               class="vote.stv")
 	print(summary(result))
@@ -196,8 +213,9 @@ summary.vote.stv <- function(object, ...) {
   # remove quotas for winners and compute difference
   where.winner <- which(rowSums(object$elect.elim==1)==1)
   pref[where.winner,] <- pref[where.winner,] - object$elect.elim[where.winner,]*object$quotas[where.winner]
-  df[2:(nrow(df)-2), seq(2,ncol(df), by=2)] <- t(round(
-      object$preferences[2:nrow(object$preferences),] - pref[1:(nrow(pref)-1),], 3))
+  tmp <- t(round(object$preferences[2:nrow(object$preferences),] - pref[1:(nrow(pref)-1),], 3))
+  if(nrow(tmp) == 1) tmp <- as.numeric(tmp) # because of R weirdness with vectors and matrices (when there is just one round)
+  df[2:(nrow(df)-2), seq(2,ncol(df), by=2)] <- tmp
   where.elim <- which(rowSums(object$elect.elim==-1)==1)
   cnames <- colnames(object$elect.elim)
   for(i in 1:ncounts) {
