@@ -1,5 +1,6 @@
-stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '\t', 
-                verbose = FALSE, seed = 1234, quiet = FALSE, ...) {
+stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, 
+                fsep = '\t', ties = c("f", "b"), constant.quota = FALSE,
+                verbose = FALSE, seed = 1234, quiet = FALSE, digits = 3, ...) {
 	###################################
 	# Single transferable vote.
 	# Adopted from Bernard Silverman's code.
@@ -64,9 +65,16 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 	w <- rep(1, nvotes)
 	
 	# Create elimination ranking using forwards tie-breaking
-	ftb <- ranking.forwards.tiebreak(x, nc, seed)
-	tie.elim.rank <- ftb[[1]]
-	sampled <- ftb[[2]]
+	tie.method <- match.arg(ties)
+	tie.method.name <- c(f = "forwards", b = "backwards")
+	
+	if(tie.method == "f") {
+	    ftb <- ranking.forwards.tiebreak(x, nc, seed)
+	    tie.elim.rank <- ftb[[1]]
+	    sampled <- ftb[[2]]
+	} else {
+	    if(!is.null(seed)) set.seed(seed)
+	}
 	
 	# initialize results
 	result.pref <- result.elect <- matrix(NA, ncol=nc, nrow=0, 
@@ -90,7 +98,8 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
         wD <- w * A
 		vcast <- apply(wD, 2, sum)
 		names(vcast) <- cnames
-		quota <- sum(vcast)/(mcan + 1) + eps
+		if(!constant.quota || count == 1)
+		    quota <- sum(vcast)/(mcan + 1) + eps
 		result.quota <- c(result.quota, quota)
 		result.pref <- rbind(result.pref, vcast)
 		result.elect <- rbind(result.elect, rep(0,nc))
@@ -100,21 +109,30 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 		    rownames(df) <- count
 		    print(df)
 		}
-		#
+		
 		# if leading candidate exceeds quota, declare elected and adjust weights
 		# mark candidate for elimination in subsequent counting
 		#
+		# if the number of remaining candidates is smaller equal the number of seats, 
+		# then select the one with the largest vcast, no matter if quota is exceeded
+		#
 		vmax <- max(vcast)
-		if(vmax >= quota) {
+		if(vmax >= quota || sum(vcast > 0) <= mcan) {
 			ic <- (1:nc)[vcast == vmax]
 			tie <- FALSE
 			if(length(ic) > 1) {# tie
-			    iic <- which.max(tie.elim.rank[ic])
+			    if(tie.method == "f") 
+			        iic <- which.max(tie.elim.rank[ic])
+			    else {
+			        iica <- backwards.tiebreak(result.pref, ic, elim = FALSE)
+			        iic <- iica[[1]]
+			        sampled <- iica[[2]]
+			    }
 			    ic <- ic[iic]
 			    tie <- TRUE
 			}
 			index <- (x[, ic] == 1)
-			surplus <- (vmax - quota)/vmax
+			surplus <- if(sum(vcast > 0) > mcan) (vmax - quota)/vmax else 0
 			# The two ways of computing weights should be equivalent, but the first way could be faster.
 			w[index] <- if(!equal.ranking) w[index] * surplus
 			                else rowSums(wD[index, ]) - wD[index, ic] + wD[index, ic] * surplus
@@ -124,7 +142,7 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 			if(verbose && !quiet) {
 			    cat("Candidate", cnames[ic], "elected ")
 			    if(tie) {
-			        cat("using forwards tie-breaking method ")
+			        cat("using", tie.method.name[tie.method], "tie-breaking method ")
 			        if(sampled[ic]) cat("(sampled)")
 			    }
 			    cat("\n")
@@ -150,7 +168,13 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 		    }
 			tie <- FALSE
 			if(length(ic) > 1) {# tie
-			    iic <- which.min(tie.elim.rank[ic])
+			    if(tie.method == "f")
+			        iic <- which.min(tie.elim.rank[ic])
+			    else { # backwards
+			        iica <- backwards.tiebreak(result.pref, ic)
+			        iic <- iica[[1]]
+			        sampled <- iica[[2]]
+			    }
 			    ic <- ic[iic]
 			    tie <- TRUE
 			}
@@ -159,7 +183,7 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 			    cat("Candidate", cnames[ic], "eliminated ")
 			    if(zero.eliminated) cat("due to zero first preferences ")
 			    if(tie) {
-			        cat("using forwards tie-breaking method ")
+			        cat("using", tie.method.name[tie.method], "tie-breaking method ")
 			        if(sampled[ic]) cat("(sampled)")
 			    }
 			    cat("\n")
@@ -181,7 +205,7 @@ stv <- function(votes, mcan = NULL, eps = 0.001, equal.ranking = FALSE, fsep = '
 	               elect.elim=result.elect, equal.pref.allowed = equal.ranking, data=orig.x, 
 	               invalid.votes=votes[setdiff(rownames(votes), rownames(x)),,drop = FALSE]), 
 	               class="vote.stv")
-	if(!quiet) print(summary(result))
+	if(!quiet) print(summary(result, digits = digits))
 	invisible(result)
 }
 
@@ -220,6 +244,30 @@ ranking.forwards.tiebreak <- function(x, nc, seed = NULL) {
         }
     }
     return(list(rnk, sampled))
+}
+
+backwards.tiebreak <- function(prefs, ic, elim = TRUE) {
+    if(!elim) prefs <- -prefs
+    if(is.null(dim(prefs))) dim(prefs) <- c(1, length(prefs))
+    sampled <- rep(FALSE, ncol(prefs))
+    rnk <- t(apply(prefs, 1, rank, ties.method="min"))
+    if(is.null(dim(rnk))) dim(rnk) <- c(1, length(rnk))
+    i <- nrow(rnk)
+    ic.rnk <- rnk[i, ic]
+    ic.rnk.sort <- sort(ic.rnk)
+    icv <- rep(FALSE, ncol(prefs))
+    icv[ic] <- TRUE
+    while(i > 1 && length(ic.rnk) > 1 && ic.rnk.sort[1] == ic.rnk.sort[2]){
+        ic <- which(icv & (rnk[i, ] == ic.rnk.sort[1]))
+        i <- i - 1
+        ic.rnk <- rnk[i, ic]
+        ic.rnk.sort <- sort(ic.rnk)
+    }
+    if(i == 1 && length(ic.rnk) > 1 && ic.rnk.sort[1] == ic.rnk.sort[2]) { # need sampling
+        selected <- sample(1:length(ic), 1)
+        sampled[ic[selected]] <- TRUE
+    } else selected <- which.min(ic.rnk)
+    return(list(selected, sampled))
 }
 
 summary.vote.stv <- function(object, ..., digits = 3) {

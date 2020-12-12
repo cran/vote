@@ -1,10 +1,10 @@
-1af23864aa763613ff48754244535f17 *ChangeLog
-1d419099346635edb5ddb60b4aff4c9a *DESCRIPTION
+011392f739eca7378d9e59a2f62e41f9 *ChangeLog
+8300e3421808f85637755434d0bcdb05 *DESCRIPTION
 8f655a76435bad3b42aecb429a9d32a1 *NAMESPACE
 0cb7ad3d4c340767f6c0b880de7d08fc *R/check_votes.R
 dac9111f799d17087843898daeffe39c *R/condorcet.R
 9c67f8aaaff564cf2d9b447d82c733f2 *R/count_votes.R
-02269d927bb409d3b58279b54cfb4ea0 *R/stv.R
+626337f87e881831dfe9eb09e26c4e93 *R/stv.R
 a81fd2bd077c56dfc9c8dddbbb1d1820 *R/two_round_runoff.R
 909eb4715f8aa7ee1ad151582bed5af4 *R/vote_by_sum.R
 cec3d9a4cb89a1362b8f05c48b4b5736 *data/dublin_west.rda
@@ -17,10 +17,10 @@ b9ce9d4ad3a269128fb9ae782d2e31c0 *data/ims_score.rda
 f5930dab254809ce30d75815c22e83bd *man/approval.Rd
 03a10f2217ac95464258e84462426ebb *man/condorcet.Rd
 5f04e6ed764f2730c3b1eb33953dbbb5 *man/count.votes.Rd
-3fbc65a45cbecd4955ef53b13c968d79 *man/dublin_west.Rd
+2d759198eadc75aee32316d6c01742bc *man/dublin_west.Rd
 97f588bfd7f0392c3e7d94603a93a17e *man/food_election.Rd
 b79c92aa69958ab4477253a166f0461f *man/ims_election.Rd
 1e777b1ed5623bb3f60430a8fd815945 *man/score.Rd
-219aa9c6a9cb212a1e46fa4c4ccf869c *man/stv.Rd
+ae6175ad6c4a49542acd9bcdf5d53521 *man/stv.Rd
 bc1d40caad6ac003570b22b22c568f41 *man/two_round_runoff.Rd
 5915cd5eed921d9c51144adf20fff310 *man/vote-package.Rd
