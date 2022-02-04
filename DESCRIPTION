@@ -1,8 +1,8 @@
 Package: vote
 Type: Package
 Title: Election Vote Counting
-Version: 2.3-1
-Date: 2021-8-30
+Version: 2.3-2
+Date: 2022-02-04
 Author: Hana Sevcikova, Bernard Silverman, Adrian Raftery
 Maintainer: Hana Sevcikova<hanas@uw.edu>
 Description: Counting election votes and determining election results by different methods, including
@@ -12,6 +12,6 @@ Imports: formattable, knitr, data.table, fields
 Suggests: ggplot2
 License: GPL (>= 2)
 NeedsCompilation: no
-Packaged: 2021-08-30 23:12:19 UTC; hana
+Packaged: 2022-02-04 20:01:00 UTC; hana
 Repository: CRAN
-Date/Publication: 2021-09-02 13:20:02 UTC
+Date/Publication: 2022-02-04 21:00:02 UTC
